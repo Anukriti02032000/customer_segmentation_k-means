@@ -4,7 +4,7 @@ import numpy as np
 import pickle
 import matplotlib.pyplot as plt
 
-# Page configuration
+# Page setup
 st.set_page_config(
     page_title="Customer Segmentation using K-Means Clustering",
     layout="wide"
@@ -44,14 +44,17 @@ if uploaded_file is not None:
     st.subheader("Selected Features for Clustering")
     st.write(numeric_cols)
 
+    # Ensure minimum 2 numeric columns exist
     if len(numeric_cols) >= 2:
 
-        # Select first two numeric columns
-        X = df[numeric_cols[:2]].dropna()
+        # IMPORTANT FIX: Always select ONLY 2 features
+        selected_features = numeric_cols[:2]
+
+        X = df[selected_features].dropna()
 
         try:
 
-            # Load model (correct path for your repo)
+            # Load trained model
             model = pickle.load(open("kmeans_model.pkl", "rb"))
 
             # Predict clusters
@@ -73,14 +76,14 @@ if uploaded_file is not None:
             fig, ax = plt.subplots()
 
             ax.scatter(
-                X.iloc[:, 0],
-                X.iloc[:, 1],
+                X[selected_features[0]],
+                X[selected_features[1]],
                 c=clusters,
                 cmap="viridis"
             )
 
-            ax.set_xlabel(numeric_cols[0])
-            ax.set_ylabel(numeric_cols[1])
+            ax.set_xlabel(selected_features[0])
+            ax.set_ylabel(selected_features[1])
 
             st.pyplot(fig)
 
@@ -100,8 +103,8 @@ if uploaded_file is not None:
                 mime="text/csv"
             )
 
-        except FileNotFoundError:
-            st.error("Model file not found. Please ensure kmeans_model.pkl exists in GitHub repository.")
+        except Exception as e:
+            st.error("Model prediction failed. Please check dataset format.")
 
     else:
         st.error("Dataset must contain at least two numeric columns.")
