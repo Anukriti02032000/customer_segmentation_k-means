@@ -1,156 +1,102 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
+import pickle
 import matplotlib.pyplot as plt
 
-# PAGE CONFIG
-st.set_page_config(
-    page_title="Customer Segmentation Dashboard",
-    layout="wide"
-)
+# Page config
+st.set_page_config(page_title="Customer Segmentation Dashboard", layout="wide")
 
-# TITLE
-st.title("Customer Segmentation using K-Means Clustering")
+# Title
+st.title("AI-Based Customer Segmentation Analytics Dashboard")
 
 st.write(
-    "Upload any customer dataset containing numeric features. "
-    "The system automatically detects numeric columns, removes missing values, "
-    "applies scaling, performs clustering and generates customer segment insights."
+    "Upload a customer transaction dataset to generate behavior-based segmentation insights using K-Means clustering."
 )
 
-# FILE UPLOADER
-uploaded_file = st.file_uploader(
-    "Upload CSV or Excel file",
-    type=["csv", "xlsx"]
-)
+# Upload dataset
+uploaded_file = st.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
 
 if uploaded_file is not None:
 
-    # LOAD DATASET
+    # Load dataset
     if uploaded_file.name.endswith(".csv"):
         df = pd.read_csv(uploaded_file)
     else:
         df = pd.read_excel(uploaded_file)
 
-    # DATASET PREVIEW
     st.subheader("Dataset Preview")
     st.dataframe(df.head())
 
-    # DATASET SHAPE
     st.subheader("Dataset Shape")
     st.write(df.shape)
 
-    # NUMERIC COLUMN SELECTION
+    # Select numeric columns
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
 
-    st.subheader("Numeric Columns Used for Clustering")
+    st.subheader("Selected Features for Clustering")
     st.write(numeric_cols)
 
-    if len(numeric_cols) < 2:
-        st.error("Dataset must contain at least two numeric columns.")
-        st.stop()
+    if len(numeric_cols) >= 2:
 
-    # REMOVE MISSING VALUES
-    numeric_df = df[numeric_cols].dropna()
+        # Use first two numeric columns
+        X = df[numeric_cols[:2]]
 
-    st.subheader("Dataset After Removing Missing Values")
-    st.write(numeric_df.shape)
+        # Remove missing values
+        X = X.dropna()
 
-    # FEATURE SCALING
-    scaler = StandardScaler()
-    scaled_data = scaler.fit_transform(numeric_df)
+        # Load trained model
+        model = pickle.load(open("models/kmeans_model.pkl", "rb"))
 
-    # ELBOW METHOD
-    inertia = []
+        # Predict clusters
+        clusters = model.predict(X)
 
-    for k in range(1, 11):
-        kmeans = KMeans(n_clusters=k, random_state=42)
-        kmeans.fit(scaled_data)
-        inertia.append(kmeans.inertia_)
+        df["Cluster"] = clusters
 
-    st.subheader("Elbow Method for Optimal Cluster Selection")
+        st.success("Customer segmentation completed successfully!")
 
-    fig, ax = plt.subplots()
-    ax.plot(range(1, 11), inertia, marker='o')
-    ax.set_xlabel("Number of Clusters")
-    ax.set_ylabel("Inertia")
-    ax.set_title("Elbow Method")
+        # Cluster summary
+        st.subheader("Cluster Summary")
 
-    st.pyplot(fig)
+        cluster_counts = df["Cluster"].value_counts().sort_index()
+        st.write(cluster_counts)
 
-    # CLUSTER SLIDER
-    k = st.slider("Select Number of Clusters", 2, 10, 3)
+        # Plot cluster visualization
+        st.subheader("Cluster Visualization")
 
-    # APPLY KMEANS
-    kmeans = KMeans(n_clusters=k, random_state=42)
-    clusters = kmeans.fit_predict(scaled_data)
+        fig, ax = plt.subplots()
 
-    numeric_df["Cluster"] = clusters
+        scatter = ax.scatter(
+            X.iloc[:, 0],
+            X.iloc[:, 1],
+            c=clusters,
+            cmap="viridis"
+        )
 
-    # SHOW CLUSTERED DATA
-    st.subheader("Clustered Dataset Preview")
-    st.dataframe(numeric_df.head())
+        ax.set_xlabel(numeric_cols[0])
+        ax.set_ylabel(numeric_cols[1])
 
-    # CLUSTER SUMMARY
-    st.subheader("Cluster Insights Summary")
+        st.pyplot(fig)
 
-    cluster_summary = numeric_df.groupby("Cluster").mean()
-    st.dataframe(cluster_summary)
+        # Cluster count chart
+        st.subheader("Customers per Cluster")
 
-    # AUTOMATIC SEGMENT INTERPRETATION
-    st.subheader("Automatic Customer Segment Interpretation")
+        st.bar_chart(cluster_counts)
 
-    cluster_labels = {}
+        # Download button
+        st.subheader("Download Segmented Dataset")
 
-    sorted_clusters = cluster_summary.mean(axis=1).sort_values().index
+        csv = df.to_csv(index=False).encode("utf-8")
 
-    cluster_labels[sorted_clusters[0]] = "Low Value Customers"
+        st.download_button(
+            label="Download CSV file",
+            data=csv,
+            file_name="customer_segments_output.csv",
+            mime="text/csv",
+        )
 
-    if len(sorted_clusters) > 1:
-        cluster_labels[sorted_clusters[1]] = "Medium Value Customers"
-
-    if len(sorted_clusters) > 2:
-        cluster_labels[sorted_clusters[-1]] = "High Value Customers"
-
-    numeric_df["Customer Segment"] = numeric_df["Cluster"].map(cluster_labels)
-
-    st.dataframe(numeric_df.head())
-
-    # SEGMENT DISTRIBUTION CHART
-    st.subheader("Customer Segment Distribution")
-
-    segment_counts = numeric_df["Customer Segment"].value_counts()
-
-    st.bar_chart(segment_counts)
-
-    # CLUSTER VISUALIZATION
-    st.subheader("Cluster Visualization (First Two Features)")
-
-    fig2, ax2 = plt.subplots()
-
-    scatter = ax2.scatter(
-        numeric_df.iloc[:, 0],
-        numeric_df.iloc[:, 1],
-        c=clusters
-    )
-
-    ax2.set_xlabel(numeric_cols[0])
-    ax2.set_ylabel(numeric_cols[1])
-
-    st.pyplot(fig2)
-
-    # DOWNLOAD BUTTON
-    csv = numeric_df.to_csv(index=False)
-
-    st.download_button(
-        label="Download Segmented Dataset",
-        data=csv,
-        file_name="segmented_customers.csv",
-        mime="text/csv"
-    )
+    else:
+        st.error("Dataset must contain at least two numeric columns for clustering.")
 
 else:
     st.info("Please upload dataset to begin segmentation.")
